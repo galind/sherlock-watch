@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from sherlock.application import ingest_ebay_search
@@ -80,4 +80,26 @@ def test_reingestion_updates_listing_without_duplicate(database_engine) -> None:
         ]
         assert record.first_seen_at == first_seen
         assert record.last_seen_at == last_seen
-        assert record.raw_payload == changed_payload
+
+
+def test_seller_data_from_ebay_payload_is_not_persisted(database_engine) -> None:
+    raw_listing = load_fixture()
+
+    with Session(database_engine) as session, session.begin():
+        ingest_ebay_search(
+            StubEbayClient(raw_listing),
+            EbayAdapter(),
+            ListingRepository(session),
+            "nomos tangente",
+            limit=1,
+        )
+
+    with Session(database_engine) as session:
+        persisted_row = session.execute(
+            text("SELECT to_jsonb(listings) FROM listings")
+        ).scalar_one()
+
+    assert "raw_payload" not in persisted_row
+    assert "seller" not in persisted_row
+    assert "seller-should-not-be-stored" not in repr(persisted_row)
+    assert "10115" not in repr(persisted_row)

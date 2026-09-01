@@ -21,5 +21,5 @@ def ingest_ebay_search(
     seen_at = now()
     for raw_listing in page.items:
         listing = adapter.normalize(raw_listing)
-        repository.upsert(listing, raw_listing, seen_at=seen_at)
+        repository.upsert(listing, seen_at=seen_at)
     return len(page.items)

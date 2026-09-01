@@ -1,9 +1,7 @@
 """Persistence mapping and upsert operations for normalized listings."""
 
-from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
 
 from sqlalchemy import DateTime, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, insert
@@ -32,7 +30,6 @@ class ListingRecord(Base):
     status: Mapped[str] = mapped_column(String(32))
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
 class ListingRepository:
@@ -44,7 +41,6 @@ class ListingRepository:
     def upsert(
         self,
         listing: Listing,
-        raw_payload: Mapping[str, Any],
         *,
         seen_at: datetime,
     ) -> None:
@@ -67,7 +63,6 @@ class ListingRepository:
             "status": listing.status.value,
             "first_seen_at": seen_at,
             "last_seen_at": seen_at,
-            "raw_payload": dict(raw_payload),
         }
         statement = insert(ListingRecord).values(**values)
         update_columns = {

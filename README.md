@@ -10,7 +10,7 @@ Sherlock is an open-source, self-hosted watch marketplace monitoring project.
 
 - A marketplace-independent `Listing` domain model.
 - An eBay Browse API adapter and OAuth-authenticated keyword search client.
-- PostgreSQL storage for normalized listings and their original eBay payload.
+- PostgreSQL storage for an allowlisted set of normalized listing fields.
 - Idempotent upserts keyed by `(marketplace, external_id)`.
 - A manual command that runs one configured eBay search.
 - A dependency-free static landing page in `frontend/`.
@@ -30,6 +30,24 @@ with `X-EBAY-C-MARKETPLACE-ID`.
 The command currently fetches one page. eBay permits a `limit` of up to 200 items
 and returns a `next` URL when another page is available. The client exposes that
 URL so later pagination can be added without changing normalization or storage.
+
+### Data minimization
+
+Sherlock persists only the listing fields represented by its marketplace-independent
+`Listing` model plus `first_seen_at` and `last_seen_at`. It does not persist complete
+eBay responses or dedicated seller/account fields such as usernames, account
+identifiers, feedback data, profile information, or contact information. Listing
+locations are reduced to city and country; more precise response fields such as
+postal code are discarded. Listing text and image URLs remain marketplace-supplied
+content and could themselves contain seller-added identifying information, so this
+design minimizes exposure rather than guaranteeing that no personal data appears.
+
+This technical data minimization does not by itself establish an exemption from
+[eBay's Marketplace Account Deletion requirements](https://www.developer.ebay.com/develop/guides/sell/marketplace-user-account-deletion).
+The opt-out documentation describes the exemption as applying to applications that
+do not persist any eBay data, while Sherlock still persists listing data. Operators
+must separately confirm and meet the requirements applicable to their eBay developer
+application.
 
 The Browse API is available in eBay's sandbox, but sandbox search data is limited
 and does not represent the live catalog. More importantly, eBay documents its Buy

@@ -20,8 +20,16 @@
   ],
   "itemLocation": {
     "city": "Berlin",
+    "stateOrProvince": "Berlin",
+    "postalCode": "10115",
     "country": "Germany",
     "countryCode": "DE"
+  },
+  "seller": {
+    "username": "seller-should-not-be-stored",
+    "feedbackPercentage": "99.8",
+    "feedbackScore": 12345,
+    "sellerAccountType": "INDIVIDUAL"
   },
   "condition": "Pre-owned - Good",
   "itemCreationDate": "2026-08-30T14:25:36.000Z",
