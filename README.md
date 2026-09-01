@@ -16,7 +16,7 @@ The broad stack is:
 - PostgreSQL
 - Marketplace-specific adapters
 - Python worker and scheduler
-- Next.js and TypeScript frontend
+- Dependency-free static landing page; Next.js and TypeScript product frontend planned
 - Discord integration
 - Docker Compose and Caddy
 
@@ -25,6 +25,19 @@ listing model and an eBay adapter that normalizes representative listing payload
 It does not make marketplace network requests or persist listings yet.
 
 ## Development
+
+### Landing page
+
+The public landing page is a dependency-free HTML and CSS site in `frontend/`.
+To preview it locally, run:
+
+```bash
+python3 -m http.server 8000 --directory frontend
+```
+
+Then visit [http://localhost:8000](http://localhost:8000).
+
+### Backend
 
 The backend requires Python 3.13 or newer and
 [uv](https://docs.astral.sh/uv/). From `backend/`, install the locked development
