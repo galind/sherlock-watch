@@ -1,0 +1,18 @@
+[project]
+name = "sherlock-backend"
+version = "0.1.0"
+description = "Backend domain and marketplace adapters for Sherlock"
+requires-python = ">=3.13"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.11",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
