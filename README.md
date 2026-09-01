@@ -16,9 +16,20 @@ The broad stack is:
 - PostgreSQL
 - Marketplace-specific adapters
 - Python worker and scheduler
-- Next.js and TypeScript frontend
+- Dependency-free static landing page; Next.js and TypeScript product frontend planned
 - Discord integration
 - Docker Compose and Caddy
+
+## Development
+
+The public landing page is a dependency-free HTML and CSS site in `frontend/`.
+To preview it locally, run:
+
+```bash
+python3 -m http.server 8000 --directory frontend
+```
+
+Then visit [http://localhost:8000](http://localhost:8000).
 
 ## License
 
