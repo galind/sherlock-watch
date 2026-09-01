@@ -20,6 +20,23 @@ The broad stack is:
 - Discord integration
 - Docker Compose and Caddy
 
+The currently implemented backend foundation provides a marketplace-independent
+listing model and an eBay adapter that normalizes representative listing payloads.
+It does not make marketplace network requests or persist listings yet.
+
+## Development
+
+The backend requires Python 3.13 or newer and
+[uv](https://docs.astral.sh/uv/). From `backend/`, install the locked development
+dependencies and run the checks with:
+
+```bash
+uv sync
+uv run ruff format --check .
+uv run ruff check .
+uv run pytest
+```
+
 ## License
 
 Sherlock is licensed under the [GNU Affero General Public License v3.0](LICENSE).
