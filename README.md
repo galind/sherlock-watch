@@ -49,16 +49,16 @@ listings, refreshes known listings, and reports both counts. PostgreSQL preserve
 `first_seen_at`, updates `last_seen_at`, and stores the latest normalized fields
 plus the original Vinted payload.
 
-Run multiple searches immediately and repeat them every five minutes:
+Run multiple searches immediately and repeat them every hour:
 
 ```bash
 uv run python -m sherlock watch-vinted "movado" "juvenia" \
-  --interval-seconds 300 \
+  --interval-seconds 3600 \
   --pages 3 \
   --per-page 48
 ```
 
-The default interval is 300 seconds. Each cycle polls the queries sequentially
+The default interval is 3600 seconds (one hour). Each cycle polls the queries sequentially
 and reports fetched, new, and already-known listing counts for each query. Add
 `--once` to run one complete cycle and exit without sleeping, which is useful for
 manual runs and configuration checks:
@@ -78,7 +78,7 @@ source .env
 set +a
 cd backend
 tmux new-session -s sherlock-vinted \
-  'uv run python -m sherlock watch-vinted "omega seamaster" "movado" --interval-seconds 300'
+  'uv run python -m sherlock watch-vinted "omega seamaster" "movado" --interval-seconds 3600'
 ```
 
 ## Development

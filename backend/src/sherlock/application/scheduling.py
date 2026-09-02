@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 
 from sherlock.application.polling import PollResult
 
-DEFAULT_VINTED_INTERVAL_SECONDS = 300
+DEFAULT_VINTED_INTERVAL_SECONDS = 3600
 
 VintedPoll = Callable[[str], PollResult]
 PollReporter = Callable[[int, str, PollResult], None]

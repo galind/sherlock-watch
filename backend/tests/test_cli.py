@@ -58,6 +58,20 @@ def test_cli_passes_watcher_options(monkeypatch) -> None:
     assert received == [(["movado", "juvenia"], 60, 2, 24, True)]
 
 
+def test_cli_uses_one_hour_default_interval(monkeypatch) -> None:
+    received: list[tuple[object, ...]] = []
+
+    monkeypatch.setattr(
+        cli,
+        "_watch_vinted",
+        lambda *args: received.append(args),
+    )
+
+    cli.main(["watch-vinted", "movado"])
+
+    assert received == [(["movado"], 3600, 3, 48, False)]
+
+
 def test_watcher_result_output_is_concise(capsys) -> None:
     cli._report_watch_result(
         3,
