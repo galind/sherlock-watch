@@ -2,9 +2,9 @@
 
 Sherlock is an open-source, self-hosted watch marketplace monitoring project.
 
-Sherlock is pre-alpha. The backend can manually poll Vinted searches, normalize
-their listings, and persist current state in PostgreSQL. It does not yet schedule
-searches or send alerts.
+Sherlock is pre-alpha. The backend can poll Vinted searches, normalize their
+listings, and persist current state in PostgreSQL. It can run those polls on a
+simple foreground schedule, but it does not yet send alerts.
 
 The repository also includes a dependency-free static landing page in `frontend/`.
 
@@ -48,6 +48,55 @@ The command deduplicates IDs repeated across shifting pages, inserts newly seen
 listings, refreshes known listings, and reports both counts. PostgreSQL preserves
 `first_seen_at`, updates `last_seen_at`, and stores the latest normalized fields
 plus the original Vinted payload.
+
+Run multiple searches immediately and repeat them every hour:
+
+```bash
+uv run python -m sherlock watch-vinted "movado" "juvenia" \
+  --interval-seconds 3600 \
+  --pages 3 \
+  --per-page 48
+```
+
+The default interval is 3600 seconds (one hour). Each cycle polls the queries sequentially
+and reports fetched, new, and already-known listing counts for each query. Add
+`--once` to run one complete cycle and exit without sleeping, which is useful for
+manual runs and configuration checks:
+
+```bash
+uv run python -m sherlock watch-vinted "movado" "juvenia" --once
+```
+
+For a reusable local query list, put one query per line in `queries.txt` (blank
+lines are ignored) and pass it with `--queries-file`:
+
+```text
+omega seamaster
+movado
+juvenia
+```
+
+```bash
+uv run python -m sherlock watch-vinted --queries-file queries.txt \
+  --interval-seconds 3600
+```
+
+The local `queries.txt` file is ignored by Git because its contents are
+deployment-specific.
+
+This scheduler is intentionally a simple foreground process. It must currently
+be kept running manually and stops if a poll fails. For a homelab, run it in a
+persistent terminal multiplexer after loading the environment, for example:
+
+```bash
+cd /path/to/sherlock
+set -a
+source .env
+set +a
+cd backend
+tmux new-session -s sherlock-vinted \
+  'uv run python -m sherlock watch-vinted "omega seamaster" "movado" --interval-seconds 3600'
+```
 
 ## Development
 
