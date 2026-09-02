@@ -13,7 +13,6 @@
 - Isolate marketplace-specific behavior behind adapters.
 - Core and domain logic must not depend on how an individual marketplace is accessed.
 - The API, worker/scheduler, frontend, and Discord bot may run as different processes while remaining part of the same application and codebase.
-- PostgreSQL is the shared source of persistent state.
 - Do not introduce Redis, message brokers, Elasticsearch, microservices, or similar infrastructure without a demonstrated need.
 
 ## Development workflow
@@ -41,7 +40,7 @@ Do not make branch naming more complicated than this.
 
 Use Conventional Commits. For example:
 
-- feat: add ebay listing adapter
+- feat: add marketplace listing adapter
 - fix: handle listings without prices
 - refactor: extract listing normalization
 - docs: document marketplace adapter contract

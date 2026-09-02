@@ -6,12 +6,6 @@ from decimal import Decimal
 from enum import StrEnum
 
 
-class Marketplace(StrEnum):
-    """A marketplace from which a listing originated."""
-
-    EBAY = "ebay"
-
-
 class ListingStatus(StrEnum):
     """The marketplace-reported availability of a listing."""
 
@@ -38,7 +32,7 @@ class Money:
 class Listing:
     """A marketplace listing normalized for use by Sherlock."""
 
-    marketplace: Marketplace
+    marketplace: str
     external_id: str
     url: str
     title: str
