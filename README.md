@@ -2,10 +2,9 @@
 
 Sherlock is an open-source, self-hosted watch marketplace monitoring project.
 
-Sherlock is pre-alpha. The backend contains marketplace-neutral listing domain
-types, a boundary for marketplace adapters, and an initial Vinted catalog client
-and normalizer. It does not yet persist listings, schedule searches, or send
-alerts.
+Sherlock is pre-alpha. The backend can manually poll Vinted searches, normalize
+their listings, and persist current state in PostgreSQL. It does not yet schedule
+searches or send alerts.
 
 The repository also includes a dependency-free static landing page in `frontend/`.
 
@@ -23,17 +22,43 @@ without notice. Page-number pagination also shifts while new listings arrive, so
 consumers must deduplicate overlapping pages and cannot assume a broad,
 high-volume search captures every listing.
 
+## Local setup
+
+The backend requires Python 3.13 or newer, PostgreSQL, and
+[uv](https://docs.astral.sh/uv/). Create a PostgreSQL database, copy the example
+configuration, and apply the schema:
+
+```bash
+cp .env.example .env
+set -a
+source .env
+set +a
+cd backend
+uv sync --locked
+uv run alembic upgrade head
+```
+
+Run a targeted Vinted poll across three pages of 48 results:
+
+```bash
+uv run python -m sherlock poll-vinted "omega seamaster" --pages 3 --per-page 48
+```
+
+The command deduplicates IDs repeated across shifting pages, inserts newly seen
+listings, refreshes known listings, and reports both counts. PostgreSQL preserves
+`first_seen_at`, updates `last_seen_at`, and stores the latest normalized fields
+plus the original Vinted payload.
+
 ## Development
 
-The backend requires Python 3.13 or newer and
-[uv](https://docs.astral.sh/uv/). From `backend/`, install the locked development
-dependencies and run the checks with:
+From `backend/`, run the checks with:
 
 ```bash
 uv sync --locked
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest
+uv run alembic check
 ```
 
 Preview the static landing page from the repository root with:
