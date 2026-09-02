@@ -2,6 +2,7 @@
 
 import argparse
 from collections.abc import Sequence
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -35,10 +36,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     watch_parser.add_argument(
         "queries",
-        nargs="+",
+        nargs="*",
         type=_non_empty_query,
         metavar="QUERY",
-        help="one or more Vinted keyword searches",
+        help="Vinted keyword searches (or use --queries-file)",
+    )
+    watch_parser.add_argument(
+        "--queries-file",
+        type=Path,
+        metavar="PATH",
+        help="UTF-8 file containing one Vinted query per line",
     )
     watch_parser.add_argument(
         "--interval-seconds",
@@ -59,8 +66,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.command == "poll-vinted":
             _poll_vinted(args.query, args.pages, args.per_page)
         elif args.command == "watch-vinted":
+            try:
+                queries = _resolve_watch_queries(args.queries, args.queries_file)
+            except ValueError as error:
+                parser.error(str(error))
             _watch_vinted(
-                args.queries,
+                queries,
                 args.interval_seconds,
                 args.pages,
                 args.per_page,
@@ -94,6 +105,32 @@ def _non_empty_query(value: str) -> str:
     if not query:
         raise argparse.ArgumentTypeError("query must not be empty")
     return query
+
+
+def _resolve_watch_queries(
+    positional_queries: Sequence[str], queries_file: Path | None
+) -> list[str]:
+    if positional_queries and queries_file is not None:
+        raise ValueError("use positional queries or --queries-file, not both")
+    if queries_file is None:
+        if not positional_queries:
+            raise ValueError("provide at least one query or --queries-file")
+        return list(positional_queries)
+
+    try:
+        queries = [
+            line.strip()
+            for line in queries_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except OSError as error:
+        raise ValueError(
+            f"could not read queries file {queries_file}: {error}"
+        ) from error
+
+    if not queries:
+        raise ValueError(f"queries file {queries_file} does not contain any queries")
+    return queries
 
 
 def _poll_vinted(query: str, pages: int, per_page: int) -> None:

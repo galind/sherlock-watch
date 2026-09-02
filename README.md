@@ -67,6 +67,23 @@ manual runs and configuration checks:
 uv run python -m sherlock watch-vinted "movado" "juvenia" --once
 ```
 
+For a reusable local query list, put one query per line in `queries.txt` (blank
+lines are ignored) and pass it with `--queries-file`:
+
+```text
+omega seamaster
+movado
+juvenia
+```
+
+```bash
+uv run python -m sherlock watch-vinted --queries-file queries.txt \
+  --interval-seconds 3600
+```
+
+The local `queries.txt` file is ignored by Git because its contents are
+deployment-specific.
+
 This scheduler is intentionally a simple foreground process. It must currently
 be kept running manually and stops if a poll fails. For a homelab, run it in a
 persistent terminal multiplexer after loading the environment, for example:

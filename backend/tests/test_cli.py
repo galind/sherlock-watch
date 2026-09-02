@@ -9,6 +9,7 @@ from sherlock.application import PollResult
     [
         ["watch-vinted", "movado", "--interval-seconds", "0"],
         ["watch-vinted", "   ", "--once"],
+        ["watch-vinted"],
         ["watch-vinted", "movado", "--pages", "0"],
         ["watch-vinted", "movado", "--per-page", "97"],
     ],
@@ -70,6 +71,44 @@ def test_cli_uses_one_hour_default_interval(monkeypatch) -> None:
     cli.main(["watch-vinted", "movado"])
 
     assert received == [(["movado"], 3600, 3, 48, False)]
+
+
+def test_cli_reads_queries_file(monkeypatch, tmp_path) -> None:
+    queries_file = tmp_path / "queries.txt"
+    queries_file.write_text("movado\n\n juvenia \n", encoding="utf-8")
+    received: list[tuple[object, ...]] = []
+
+    monkeypatch.setattr(
+        cli,
+        "_watch_vinted",
+        lambda *args: received.append(args),
+    )
+
+    cli.main(["watch-vinted", "--queries-file", str(queries_file), "--once"])
+
+    assert received == [(["movado", "juvenia"], 3600, 3, 48, True)]
+
+
+def test_cli_rejects_positional_queries_with_queries_file(
+    monkeypatch, tmp_path
+) -> None:
+    queries_file = tmp_path / "queries.txt"
+    queries_file.write_text("movado\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(["watch-vinted", "juvenia", "--queries-file", str(queries_file)])
+
+    assert error.value.code == 2
+
+
+def test_cli_rejects_empty_queries_file(tmp_path) -> None:
+    queries_file = tmp_path / "queries.txt"
+    queries_file.write_text("\n  \n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as error:
+        cli.main(["watch-vinted", "--queries-file", str(queries_file)])
+
+    assert error.value.code == 2
 
 
 def test_watcher_result_output_is_concise(capsys) -> None:
