@@ -1,0 +1,30 @@
+{
+  "id": 9867705286,
+  "title": "Omega Seamaster Automatic",
+  "url": "https://www.vinted.es/items/9867705286-omega-seamaster-automatic",
+  "price": {
+    "amount": "1250.50",
+    "currency_code": "EUR"
+  },
+  "status": "Muy bueno",
+  "is_visible": true,
+  "photo": {
+    "id": 41711055439,
+    "url": "https://images1.vinted.net/t/primary/f800/example.jpeg",
+    "full_size_url": "https://images1.vinted.net/tc/primary/example.jpeg"
+  },
+  "photos": [
+    {
+      "id": 41711055439,
+      "full_size_url": "https://images1.vinted.net/tc/primary/example.jpeg"
+    },
+    {
+      "id": 41711055440,
+      "full_size_url": "https://images1.vinted.net/tc/caseback/example.jpeg"
+    }
+  ],
+  "user": {
+    "id": 32182850,
+    "login": "example-seller"
+  }
+}
