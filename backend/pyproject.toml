@@ -1,21 +1,9 @@
 [project]
 name = "sherlock-backend"
 version = "0.1.0"
-description = "Backend domain and marketplace adapters for Sherlock"
+description = "Marketplace-neutral backend foundation for Sherlock"
 requires-python = ">=3.13"
-dependencies = [
-    "alembic>=1.15",
-    "httpx>=0.28",
-    "psycopg[binary]>=3.2",
-    "sqlalchemy>=2.0",
-]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/sherlock"]
+dependencies = []
 
 [dependency-groups]
 dev = [
