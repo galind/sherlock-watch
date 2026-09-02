@@ -50,5 +50,6 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+/experiments/
 tmp/
 var/

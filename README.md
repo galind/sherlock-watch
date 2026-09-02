@@ -2,12 +2,26 @@
 
 Sherlock is an open-source, self-hosted watch marketplace monitoring project.
 
-Sherlock is pre-alpha. Marketplace source viability is currently being evaluated,
-and there is no production marketplace integration yet. The backend is deliberately
-small: it contains only marketplace-neutral listing domain types and the boundary
-future marketplace adapters can use to normalize listings.
+Sherlock is pre-alpha. The backend contains marketplace-neutral listing domain
+types, a boundary for marketplace adapters, and an initial Vinted catalog client
+and normalizer. It does not yet persist listings, schedule searches, or send
+alerts.
 
 The repository also includes a dependency-free static landing page in `frontend/`.
+
+## Vinted access constraints
+
+The Vinted client uses the anonymous JSON catalog endpoint exposed by the web
+experience. It first loads the configured regional Vinted homepage to receive
+anonymous session cookies, then requests newest-first pages from
+`GET /api/v2/catalog/items`. It does not log in, execute JavaScript, use browser
+automation, or attempt to bypass access controls.
+
+This is an undocumented web endpoint rather than a supported public API. Vinted
+may change its response, authentication flow, availability, or permitted usage
+without notice. Page-number pagination also shifts while new listings arrive, so
+consumers must deduplicate overlapping pages and cannot assume a broad,
+high-volume search captures every listing.
 
 ## Development
 
