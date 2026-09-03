@@ -135,6 +135,18 @@ docker build --target runtime -t sherlock-backend .
 docker run --rm sherlock-backend --help
 ```
 
+Published GitHub Releases also provide a multi-platform image for AMD64 and
+ARM64 through GitHub Container Registry. Pull a specific release tag and pass
+CLI arguments directly to the container:
+
+```bash
+docker pull ghcr.io/galind/sherlock-watch:v0.1.0
+docker run --rm ghcr.io/galind/sherlock-watch:v0.1.0 --help
+```
+
+Stable releases also update the `latest` image tag. Prereleases are published
+only under their exact release tag.
+
 ## Development
 
 Compose uses the `development` image target, which adds the locked development
