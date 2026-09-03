@@ -11,9 +11,8 @@ from sherlock.domain import Listing, Money
 from sherlock.notifications import (
     DiscordWebhookError,
     DiscordWebhookNotifier,
-    format_discord_message,
+    format_discord_embed,
 )
-from sherlock.notifications.discord import DISCORD_CONTENT_LIMIT
 
 WEBHOOK_URL = "https://discord.example/api/webhooks/id/secret-token"
 
@@ -50,6 +49,7 @@ def listing(number: int, *, title: str | None = None) -> Listing:
         url=f"https://www.vinted.es/items/{number}-watch",
         title=title or f"Vintage watch {number}",
         price=Money(Decimal("125.50"), "EUR"),
+        image_urls=(f"https://images.vinted.es/{number}.jpg",),
     )
 
 
@@ -59,39 +59,33 @@ def test_webhook_posts_query_count_and_listing_details() -> None:
 
     notifier.notify("omega seamaster", [listing(1), listing(2)])
 
-    assert len(opener.requests) == 1
-    request, timeout = opener.requests[0]
-    payload = json.loads(request.data)
-    assert request.full_url == WEBHOOK_URL
-    assert request.method == "POST"
-    assert request.get_header("Content-type") == "application/json"
-    assert timeout == 10
-    assert 'Vinted query "omega seamaster": 2 new listings' in payload["content"]
-    assert "Vintage watch 1 — 125.50 EUR" in payload["content"]
-    assert "https://www.vinted.es/items/1-watch" in payload["content"]
+    assert len(opener.requests) == 2
+    for request, timeout in opener.requests:
+        payload = json.loads(request.data)
+        assert request.full_url == WEBHOOK_URL
+        assert request.method == "POST"
+        assert request.get_header("Content-type") == "application/json"
+        assert timeout == 10
+        assert "content" not in payload
+        assert len(payload["embeds"]) == 1
 
-
-def test_webhook_message_stays_within_discord_limit_and_reports_omissions() -> None:
-    listings = [
-        listing(number, title="Very desirable vintage watch " * 20)
-        for number in range(50)
+    first_embed = json.loads(opener.requests[0][0].data)["embeds"][0]
+    assert first_embed["title"] == "Vintage watch 1"
+    assert first_embed["url"] == "https://www.vinted.es/items/1-watch"
+    assert first_embed["fields"] == [
+        {"name": "Price", "value": "125.50 EUR", "inline": True},
+        {"name": "Search", "value": "omega seamaster", "inline": True},
     ]
-
-    message = format_discord_message("collectible watches", listings)
-
-    assert len(message) <= DISCORD_CONTENT_LIMIT
-    assert "more listings omitted" in message
-    assert "50 new listings" in message
+    assert first_embed["thumbnail"] == {
+        "url": "https://images.vinted.es/1.jpg",
+    }
 
 
-def test_webhook_message_caps_listing_details_even_when_they_are_short() -> None:
-    listings = [listing(number, title=f"Watch {number}") for number in range(20)]
+def test_discord_embed_truncates_long_title_and_query() -> None:
+    embed = format_discord_embed("search " * 100, listing(1, title="watch " * 100))
 
-    message = format_discord_message("watches", listings)
-
-    assert "Watch 9 —" in message
-    assert "Watch 10 —" not in message
-    assert "10 more listings omitted" in message
+    assert len(embed["title"]) <= 256
+    assert len(embed["fields"][1]["value"]) <= 200
 
 
 def test_notifier_skips_empty_listing_collection() -> None:
