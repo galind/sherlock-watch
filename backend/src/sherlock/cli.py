@@ -14,7 +14,11 @@ from sherlock.application import (
     watch_vinted_searches,
 )
 from sherlock.config import Settings
-from sherlock.marketplaces.vinted import VintedAdapter, VintedClient
+from sherlock.marketplaces.vinted import (
+    VINTED_WATCH_CATALOG_IDS,
+    VintedAdapter,
+    VintedClient,
+)
 from sherlock.notifications import DiscordWebhookError, DiscordWebhookNotifier
 from sherlock.persistence import ListingRepository, create_database_engine
 
@@ -66,7 +70,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         if args.command == "poll-vinted":
-            _poll_vinted(args.query, args.pages, args.per_page)
+            _poll_vinted(args.query, args.pages, args.per_page, args.watches_only)
         elif args.command == "watch-vinted":
             try:
                 queries = _resolve_watch_queries(args.queries, args.queries_file)
@@ -78,6 +82,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 args.pages,
                 args.per_page,
                 args.once,
+                args.watches_only,
             )
     except KeyboardInterrupt:
         print("\nVinted polling stopped.")
@@ -86,6 +91,11 @@ def main(argv: Sequence[str] | None = None) -> None:
 def _add_polling_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pages", type=_positive_int, default=3)
     parser.add_argument("--per-page", type=_vinted_per_page, default=48)
+    parser.add_argument(
+        "--watches-only",
+        action="store_true",
+        help="limit Vinted results to its women's and men's watch categories",
+    )
 
 
 def _positive_int(value: str) -> int:
@@ -135,7 +145,9 @@ def _resolve_watch_queries(
     return queries
 
 
-def _poll_vinted(query: str, pages: int, per_page: int) -> None:
+def _poll_vinted(
+    query: str, pages: int, per_page: int, watches_only: bool = False
+) -> None:
     settings = Settings.from_environment()
     engine = create_database_engine(settings.database_url)
     try:
@@ -151,6 +163,7 @@ def _poll_vinted(query: str, pages: int, per_page: int) -> None:
                 query,
                 pages=pages,
                 per_page=per_page,
+                catalog_ids=VINTED_WATCH_CATALOG_IDS if watches_only else (),
             )
     finally:
         engine.dispose()
@@ -167,6 +180,7 @@ def _watch_vinted(
     pages: int,
     per_page: int,
     once: bool,
+    watches_only: bool = False,
 ) -> None:
     settings = Settings.from_environment()
     notifier = (
@@ -189,6 +203,7 @@ def _watch_vinted(
                         query,
                         pages=pages,
                         per_page=per_page,
+                        catalog_ids=(VINTED_WATCH_CATALOG_IDS if watches_only else ()),
                     )
 
             watch_vinted_searches(

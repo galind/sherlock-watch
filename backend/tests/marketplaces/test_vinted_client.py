@@ -79,6 +79,26 @@ def test_search_bootstraps_anonymous_session_and_returns_page() -> None:
     assert catalog_request.get_header("Referer") == "https://www.vinted.es/catalog"
 
 
+def test_search_adds_catalog_filter_when_requested() -> None:
+    opener = StubOpener([search_payload()])
+    client = VintedClient(opener=opener)
+
+    client.search("omega", catalog_ids=(22, 97))
+
+    catalog_request = opener.requests[1]
+    assert parse_qs(urlparse(catalog_request.full_url).query)["catalog_ids"] == [
+        "22,97"
+    ]
+
+
+@pytest.mark.parametrize("catalog_ids", [(0,), (-1,), (True,), ("22",)])
+def test_search_rejects_invalid_catalog_ids(catalog_ids: tuple[object, ...]) -> None:
+    client = VintedClient(opener=StubOpener())
+
+    with pytest.raises(ValueError, match="positive integers"):
+        client.search("omega", catalog_ids=catalog_ids)
+
+
 def test_search_reuses_bootstrapped_session() -> None:
     opener = StubOpener([search_payload(), search_payload()])
     client = VintedClient(opener=opener)

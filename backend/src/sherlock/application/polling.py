@@ -1,6 +1,6 @@
 """Manual marketplace polling use cases."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -27,6 +27,7 @@ def poll_vinted_search(
     *,
     pages: int = 3,
     per_page: int = 48,
+    catalog_ids: Sequence[int] = (),
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> PollResult:
     """Fetch Vinted pages, deduplicate them, and persist current state."""
@@ -38,7 +39,12 @@ def poll_vinted_search(
     new_listings: list[Listing] = []
 
     for page_number in range(1, pages + 1):
-        page = client.search(query, page=page_number, per_page=per_page)
+        page = client.search(
+            query,
+            page=page_number,
+            per_page=per_page,
+            catalog_ids=catalog_ids,
+        )
         for raw_listing in page.items:
             listing = adapter.normalize(raw_listing)
             if listing.external_id in fetched_ids:

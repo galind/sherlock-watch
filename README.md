@@ -50,6 +50,13 @@ listings, refreshes known listings, and reports both counts. PostgreSQL preserve
 `first_seen_at`, updates `last_seen_at`, and stores the latest normalized fields
 plus the original Vinted payload.
 
+Add `--watches-only` to limit results to Vinted's women's and men's watch
+categories and remove most unrelated keyword matches:
+
+```bash
+uv run python -m sherlock poll-vinted "omega seamaster" --watches-only
+```
+
 Run multiple searches immediately and repeat them every hour:
 
 ```bash
@@ -79,11 +86,13 @@ juvenia
 
 ```bash
 uv run python -m sherlock watch-vinted --queries-file queries.txt \
-  --interval-seconds 3600
+  --watches-only --interval-seconds 3600
 ```
 
 The local `queries.txt` file is ignored by Git because its contents are
-deployment-specific.
+deployment-specific. The watch-category filter applies to every query in the
+file without changing its one-query-per-line format. Omit `--watches-only` to
+retain the broader keyword search behavior.
 
 To receive Discord notifications, add a webhook URL to the local `.env` file:
 
