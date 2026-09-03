@@ -27,6 +27,7 @@ class ListingRecord(Base):
     description: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     condition: Mapped[str | None] = mapped_column(Text)
+    seller_name: Mapped[str | None] = mapped_column(Text)
     image_urls: Mapped[list[str]] = mapped_column(JSONB)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32))
@@ -62,6 +63,7 @@ class ListingRepository:
             "description": listing.description,
             "location": listing.location,
             "condition": listing.condition,
+            "seller_name": listing.seller_name,
             "image_urls": list(listing.image_urls),
             "published_at": listing.published_at,
             "status": listing.status.value,
