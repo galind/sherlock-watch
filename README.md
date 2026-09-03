@@ -4,7 +4,8 @@ Sherlock is an open-source, self-hosted watch marketplace monitoring project.
 
 Sherlock is pre-alpha. The backend can poll Vinted searches, normalize their
 listings, and persist current state in PostgreSQL. It can run those polls on a
-simple foreground schedule, but it does not yet send alerts.
+simple foreground schedule and optionally send new-listing alerts to a Discord
+webhook.
 
 The repository also includes a dependency-free static landing page in `frontend/`.
 
@@ -83,6 +84,22 @@ uv run python -m sherlock watch-vinted --queries-file queries.txt \
 
 The local `queries.txt` file is ignored by Git because its contents are
 deployment-specific.
+
+To receive Discord notifications, add a webhook URL to the local `.env` file:
+
+```dotenv
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/example-id/example-token
+```
+
+`DISCORD_WEBHOOK_URL` is optional, and must use HTTPS with a valid host when it
+is configured. Only `watch-vinted` sends notifications, and only when a query
+finds new listings; one-shot `poll-vinted` runs never send them. Each message
+aggregates the query's new listings and includes titles, prices, and URLs where
+they fit. Messages are capped at Discord's 2000-character limit and explicitly
+note omitted listings so a large first poll does not flood the webhook.
+
+Webhook delivery is currently intentionally simple: failed deliveries emit a
+warning and polling continues, with no retries or alert history.
 
 This scheduler is intentionally a simple foreground process. It must currently
 be kept running manually and stops if a poll fails. For a homelab, run it in a

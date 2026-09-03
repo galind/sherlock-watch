@@ -72,6 +72,9 @@ def test_poll_fetches_pages_deduplicates_and_counts_new_listings() -> None:
     assert result.fetched == 2
     assert result.new == 1
     assert result.already_known == 1
+    assert tuple(listing.external_id for listing in result.new_listings) == (
+        "9867705287",
+    )
     assert client.calls == [
         ("omega seamaster", 1, 48),
         ("omega seamaster", 2, 48),
