@@ -23,26 +23,32 @@ without notice. Page-number pagination also shifts while new listings arrive, so
 consumers must deduplicate overlapping pages and cannot assume a broad,
 high-volume search captures every listing.
 
-## Local setup
+## Docker setup
 
-The backend requires Python 3.13 or newer, PostgreSQL, and
-[uv](https://docs.astral.sh/uv/). Create a PostgreSQL database, copy the example
-configuration, and apply the schema:
+Docker Compose is the recommended local setup. Copy the example configuration;
+the defaults are development-only credentials and can be used as-is:
 
 ```bash
 cp .env.example .env
-set -a
-source .env
-set +a
-cd backend
-uv sync --locked
-uv run alembic upgrade head
+```
+
+Start the persistent PostgreSQL service and wait for its health check:
+
+```bash
+docker compose up -d --wait db
+```
+
+Apply migrations explicitly. This command exits non-zero and displays the
+Alembic error if a migration fails:
+
+```bash
+docker compose run --rm migrate
 ```
 
 Run a targeted Vinted poll across three pages of 48 results:
 
 ```bash
-uv run python -m sherlock poll-vinted "omega seamaster" --pages 3 --per-page 48
+docker compose run --rm backend poll-vinted "omega seamaster" --pages 3 --per-page 48
 ```
 
 The command deduplicates IDs repeated across shifting pages, inserts newly seen
@@ -54,13 +60,13 @@ Add `--watches-only` to limit results to Vinted's women's and men's watch
 categories and remove most unrelated keyword matches:
 
 ```bash
-uv run python -m sherlock poll-vinted "omega seamaster" --watches-only
+docker compose run --rm backend poll-vinted "omega seamaster" --watches-only
 ```
 
 Run multiple searches immediately and repeat them every hour:
 
 ```bash
-uv run python -m sherlock watch-vinted "movado" "juvenia" \
+docker compose run --rm backend watch-vinted "movado" "juvenia" \
   --interval-seconds 3600 \
   --pages 3 \
   --per-page 48
@@ -72,7 +78,7 @@ and reports fetched, new, and already-known listing counts for each query. Add
 manual runs and configuration checks:
 
 ```bash
-uv run python -m sherlock watch-vinted "movado" "juvenia" --once
+docker compose run --rm backend watch-vinted "movado" "juvenia" --once
 ```
 
 For a reusable local query list, put one query per line in `queries.txt` (blank
@@ -85,7 +91,8 @@ juvenia
 ```
 
 ```bash
-uv run python -m sherlock watch-vinted --queries-file queries.txt \
+docker compose run --rm -v "$PWD/queries.txt:/app/queries.txt:ro" backend \
+  watch-vinted --queries-file /app/queries.txt \
   --watches-only --interval-seconds 3600
 ```
 
@@ -113,23 +120,46 @@ from marketplace text are disabled.
 Webhook delivery is currently intentionally simple: failed deliveries emit a
 warning and polling continues, with no retries or alert history.
 
-This scheduler is intentionally a simple foreground process. It must currently
-be kept running manually and stops if a poll fails. For a homelab, run it in a
-persistent terminal multiplexer after loading the environment, for example:
+The scheduler is intentionally a simple foreground process and stops if a poll
+fails. Compose keeps it attached to the terminal so logs and failures remain
+visible; use your host's service manager for a long-lived homelab deployment.
+
+The default Dockerfile target is the production-oriented `runtime` image. It
+contains Python 3.13, the application, migrations, and only the production
+dependencies resolved by `backend/uv.lock`; it runs as an unprivileged user.
+The image entrypoint is `python -m sherlock` and its default argument is
+`--help`, so normal CLI arguments can be appended directly:
 
 ```bash
-cd /path/to/sherlock
-set -a
-source .env
-set +a
-cd backend
-tmux new-session -s sherlock-vinted \
-  'uv run python -m sherlock watch-vinted "omega seamaster" "movado" --interval-seconds 3600'
+docker build --target runtime -t sherlock-backend .
+docker run --rm sherlock-backend --help
 ```
 
 ## Development
 
-From `backend/`, run the checks with:
+Compose uses the `development` image target, which adds the locked development
+dependencies and test sources. Run formatting and lint checks in that image:
+
+```bash
+docker compose run --rm --no-deps --entrypoint ruff backend format --check .
+docker compose run --rm --no-deps --entrypoint ruff backend check .
+```
+
+Run the full test suite against a dedicated, ephemeral PostgreSQL service. This
+keeps test table cleanup away from the persistent development database:
+
+```bash
+docker compose --profile test run --rm test
+```
+
+Validate that the models match the migrated development database:
+
+```bash
+docker compose run --rm --entrypoint alembic backend check
+```
+
+The same checks can be run directly when Python 3.13, PostgreSQL, and
+[uv](https://docs.astral.sh/uv/) are installed. From `backend/`:
 
 ```bash
 uv sync --locked
@@ -137,6 +167,23 @@ uv run ruff format --check .
 uv run ruff check .
 uv run pytest
 uv run alembic check
+```
+
+`DATABASE_URL` is used by the CLI and Alembic. Set `TEST_DATABASE_URL` to a
+separate PostgreSQL database to include the persistence integration test in a
+host-run test suite.
+
+Stop and remove local containers and networks while preserving PostgreSQL data:
+
+```bash
+docker compose --profile test down
+```
+
+To also delete the persistent development database volume, use the following
+only when its data is no longer needed:
+
+```bash
+docker compose --profile test down --volumes
 ```
 
 Preview the static landing page from the repository root with:
