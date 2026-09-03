@@ -7,12 +7,10 @@ from urllib.request import OpenerDirector, Request, build_opener
 
 from sherlock.domain import Listing
 
-DISCORD_CONTENT_LIMIT = 2000
 DEFAULT_WEBHOOK_TIMEOUT_SECONDS = 10
-_MAX_QUERY_LENGTH = 160
-_MAX_LISTING_DETAILS = 10
-_MAX_TITLE_LENGTH = 180
-_MAX_URL_LENGTH = 500
+_MAX_QUERY_LENGTH = 200
+_MAX_TITLE_LENGTH = 256
+_MAX_URL_LENGTH = 2048
 
 
 class DiscordWebhookError(RuntimeError):
@@ -20,7 +18,7 @@ class DiscordWebhookError(RuntimeError):
 
 
 class DiscordWebhookNotifier:
-    """Send aggregated listing notifications to a Discord webhook."""
+    """Send one embedded listing notification per newly found watch."""
 
     def __init__(
         self,
@@ -37,12 +35,30 @@ class DiscordWebhookNotifier:
         self._opener = opener or build_opener()
 
     def notify(self, query: str, listings: Sequence[Listing]) -> None:
-        """Send one message describing newly discovered listings."""
+        """Send one embedded message for each newly discovered listing."""
         if not listings:
             return
 
+        failures = 0
+        first_failure: DiscordWebhookError | None = None
+        for listing in listings:
+            try:
+                self._send_listing(query, listing)
+            except DiscordWebhookError as error:
+                failures += 1
+                first_failure = first_failure or error
+
+        if failures:
+            if failures == 1 and first_failure is not None:
+                raise first_failure
+            noun = "listing" if failures == 1 else "listings"
+            raise DiscordWebhookError(
+                f"Discord webhook delivery failed for {failures} {noun}"
+            )
+
+    def _send_listing(self, query: str, listing: Listing) -> None:
         payload = json.dumps(
-            {"content": format_discord_message(query, listings)},
+            {"embeds": [format_discord_embed(query, listing)]},
             ensure_ascii=False,
         ).encode("utf-8")
         request = Request(
@@ -72,34 +88,27 @@ class DiscordWebhookNotifier:
             )
 
 
-def format_discord_message(query: str, listings: Sequence[Listing]) -> str:
-    """Build a bounded Discord message with as many listing details as fit."""
-    listing_noun = "listing" if len(listings) == 1 else "listings"
-    header = (
-        f'Vinted query "{_truncate(query.strip(), _MAX_QUERY_LENGTH)}": '
-        f"{len(listings)} new {listing_noun}"
-    )
-    details: list[str] = []
-
-    for listing in listings[:_MAX_LISTING_DETAILS]:
-        detail = (
-            f"- {_truncate(listing.title, _MAX_TITLE_LENGTH)} — "
-            f"{listing.price.amount} {listing.price.currency}\n"
-            f"  {_truncate(listing.url, _MAX_URL_LENGTH)}"
-        )
-        omitted_count = len(listings) - len(details) - 1
-        parts = [header, *details, detail]
-        if omitted_count:
-            parts.append(_omitted_message(omitted_count))
-        if len("\n\n".join(parts)) > DISCORD_CONTENT_LIMIT:
-            break
-        details.append(detail)
-
-    omitted_count = len(listings) - len(details)
-    parts = [header, *details]
-    if omitted_count:
-        parts.append(_omitted_message(omitted_count))
-    return "\n\n".join(parts)
+def format_discord_embed(query: str, listing: Listing) -> dict[str, object]:
+    """Build one Discord embed for a newly discovered listing."""
+    embed: dict[str, object] = {
+        "title": _truncate(listing.title, _MAX_TITLE_LENGTH),
+        "url": _truncate(listing.url, _MAX_URL_LENGTH),
+        "fields": [
+            {
+                "name": "Price",
+                "value": f"{listing.price.amount} {listing.price.currency}",
+                "inline": True,
+            },
+            {
+                "name": "Search",
+                "value": _truncate(query.strip(), _MAX_QUERY_LENGTH),
+                "inline": True,
+            },
+        ],
+    }
+    if listing.image_urls:
+        embed["thumbnail"] = {"url": listing.image_urls[0]}
+    return embed
 
 
 def _truncate(value: str, limit: int) -> str:
@@ -107,8 +116,3 @@ def _truncate(value: str, limit: int) -> str:
     if len(normalized) <= limit:
         return normalized
     return f"{normalized[: limit - 1]}…"
-
-
-def _omitted_message(count: int) -> str:
-    noun = "listing" if count == 1 else "listings"
-    return f"… {count} more {noun} omitted."
