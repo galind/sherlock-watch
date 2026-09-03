@@ -12,12 +12,17 @@ FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "vinted" / "listing.json
 class StubVintedClient:
     def __init__(self, pages: list[VintedSearchPage]) -> None:
         self.pages = pages
-        self.calls: list[tuple[str, int, int]] = []
+        self.calls: list[tuple[str, int, int, tuple[int, ...]]] = []
 
     def search(
-        self, query: str, *, page: int = 1, per_page: int = 48
+        self,
+        query: str,
+        *,
+        page: int = 1,
+        per_page: int = 48,
+        catalog_ids=(),
     ) -> VintedSearchPage:
-        self.calls.append((query, page, per_page))
+        self.calls.append((query, page, per_page, tuple(catalog_ids)))
         return self.pages.pop(0)
 
 
@@ -76,11 +81,34 @@ def test_poll_fetches_pages_deduplicates_and_counts_new_listings() -> None:
         "9867705287",
     )
     assert client.calls == [
-        ("omega seamaster", 1, 48),
-        ("omega seamaster", 2, 48),
+        ("omega seamaster", 1, 48, ()),
+        ("omega seamaster", 2, 48, ()),
     ]
     assert [upsert[0].external_id for upsert in repository.upserts] == [
         "9867705286",
         "9867705287",
     ]
     assert all(upsert[2] == seen_at for upsert in repository.upserts)
+
+
+def test_poll_passes_catalog_filter_to_vinted_client() -> None:
+    client = StubVintedClient(
+        [
+            VintedSearchPage(
+                items=(),
+                current_page=1,
+                total_pages=1,
+                total_entries=0,
+            )
+        ]
+    )
+
+    poll_vinted_search(
+        client,
+        VintedAdapter(),
+        RecordingRepository(new_ids=set()),
+        "omega",
+        catalog_ids=(22, 97),
+    )
+
+    assert client.calls == [("omega", 1, 48, (22, 97))]

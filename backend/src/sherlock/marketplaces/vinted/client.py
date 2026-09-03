@@ -1,7 +1,7 @@
 """HTTP client for Vinted's anonymous web catalog search."""
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from http.cookiejar import CookieJar
 from typing import Any, Self
@@ -10,6 +10,7 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import HTTPCookieProcessor, OpenerDirector, Request, build_opener
 
 DEFAULT_VINTED_BASE_URL = "https://www.vinted.es"
+VINTED_WATCH_CATALOG_IDS = (22, 97)
 VINTED_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -63,6 +64,7 @@ class VintedClient:
         *,
         page: int = 1,
         per_page: int = 48,
+        catalog_ids: Sequence[int] = (),
     ) -> VintedSearchPage:
         """Return one newest-first page for a keyword query."""
         if not query.strip():
@@ -71,20 +73,30 @@ class VintedClient:
             raise ValueError("Vinted search page must be positive")
         if not 1 <= per_page <= 96:
             raise ValueError("Vinted per-page limit must be between 1 and 96")
+        normalized_catalog_ids = tuple(catalog_ids)
+        if any(
+            type(catalog_id) is not int or catalog_id < 1
+            for catalog_id in normalized_catalog_ids
+        ):
+            raise ValueError("Vinted catalog IDs must be positive integers")
 
         if not self._bootstrapped:
             self._bootstrap_anonymous_session()
 
-        params = urlencode(
-            {
-                "search_text": query.strip(),
-                "order": "newest_first",
-                "page": page,
-                "per_page": per_page,
-                "disable_search_saving": "true",
-            }
+        params: dict[str, str | int] = {
+            "search_text": query.strip(),
+            "order": "newest_first",
+            "page": page,
+            "per_page": per_page,
+            "disable_search_saving": "true",
+        }
+        if normalized_catalog_ids:
+            params["catalog_ids"] = ",".join(map(str, normalized_catalog_ids))
+
+        encoded_params = urlencode(params)
+        payload = self._request_json(
+            f"{self._base_url}/api/v2/catalog/items?{encoded_params}"
         )
-        payload = self._request_json(f"{self._base_url}/api/v2/catalog/items?{params}")
 
         raw_items = payload.get("items")
         pagination = payload.get("pagination")

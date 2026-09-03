@@ -52,11 +52,12 @@ def test_cli_passes_watcher_options(monkeypatch) -> None:
             "2",
             "--per-page",
             "24",
+            "--watches-only",
             "--once",
         ]
     )
 
-    assert received == [(["movado", "juvenia"], 60, 2, 24, True)]
+    assert received == [(["movado", "juvenia"], 60, 2, 24, True, True)]
 
 
 def test_cli_uses_one_hour_default_interval(monkeypatch) -> None:
@@ -70,7 +71,7 @@ def test_cli_uses_one_hour_default_interval(monkeypatch) -> None:
 
     cli.main(["watch-vinted", "movado"])
 
-    assert received == [(["movado"], 3600, 3, 48, False)]
+    assert received == [(["movado"], 3600, 3, 48, False, False)]
 
 
 def test_cli_reads_queries_file(monkeypatch, tmp_path) -> None:
@@ -86,7 +87,16 @@ def test_cli_reads_queries_file(monkeypatch, tmp_path) -> None:
 
     cli.main(["watch-vinted", "--queries-file", str(queries_file), "--once"])
 
-    assert received == [(["movado", "juvenia"], 3600, 3, 48, True)]
+    assert received == [(["movado", "juvenia"], 3600, 3, 48, True, False)]
+
+
+def test_cli_passes_poll_watch_filter(monkeypatch) -> None:
+    received: list[tuple[object, ...]] = []
+    monkeypatch.setattr(cli, "_poll_vinted", lambda *args: received.append(args))
+
+    cli.main(["poll-vinted", "omega", "--watches-only"])
+
+    assert received == [("omega", 3, 48, True)]
 
 
 def test_cli_rejects_positional_queries_with_queries_file(
