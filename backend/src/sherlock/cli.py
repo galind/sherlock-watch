@@ -1,6 +1,7 @@
 """Command-line entry points for Sherlock."""
 
 import argparse
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from sherlock.application import (
 )
 from sherlock.config import Settings
 from sherlock.marketplaces.vinted import VintedAdapter, VintedClient
+from sherlock.notifications import DiscordWebhookError, DiscordWebhookNotifier
 from sherlock.persistence import ListingRepository, create_database_engine
 
 
@@ -167,6 +169,11 @@ def _watch_vinted(
     once: bool,
 ) -> None:
     settings = Settings.from_environment()
+    notifier = (
+        DiscordWebhookNotifier(settings.discord_webhook_url)
+        if settings.discord_webhook_url is not None
+        else None
+    )
     engine = create_database_engine(settings.database_url)
     adapter = VintedAdapter()
 
@@ -189,15 +196,33 @@ def _watch_vinted(
                 poll,
                 interval_seconds=interval_seconds,
                 once=once,
-                report=_report_watch_result,
+                report=lambda cycle, query, result: _report_watch_result(
+                    cycle,
+                    query,
+                    result,
+                    notifier=notifier,
+                ),
             )
     finally:
         engine.dispose()
 
 
-def _report_watch_result(cycle: int, query: str, result: PollResult) -> None:
+def _report_watch_result(
+    cycle: int,
+    query: str,
+    result: PollResult,
+    *,
+    notifier: DiscordWebhookNotifier | None = None,
+) -> None:
     print(
         f'Cycle {cycle} | query="{query}" | fetched={result.fetched} | '
         f"new={result.new} | already-known={result.already_known}",
         flush=True,
     )
+    if notifier is None or result.new == 0:
+        return
+
+    try:
+        notifier.notify(query, result.new_listings)
+    except DiscordWebhookError as error:
+        print(f"Warning: {error}; polling will continue.", file=sys.stderr, flush=True)
