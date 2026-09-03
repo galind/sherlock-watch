@@ -4,11 +4,21 @@ on:
   push:
     paths:
       - "backend/**"
+      - ".dockerignore"
+      - ".env.example"
       - ".github/workflows/backend.yml"
+      - "compose.yaml"
+      - "Dockerfile"
+      - "README.md"
   pull_request:
     paths:
       - "backend/**"
+      - ".dockerignore"
+      - ".env.example"
       - ".github/workflows/backend.yml"
+      - "compose.yaml"
+      - "Dockerfile"
+      - "README.md"
 
 permissions:
   contents: read
@@ -38,6 +48,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
+      - run: docker compose --env-file ../.env.example -f ../compose.yaml config --quiet
+      - run: docker build --target runtime -t sherlock-backend:ci ..
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
@@ -48,6 +60,6 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff format --check .
       - run: uv run ruff check .
-      - run: uv run pytest
       - run: uv run alembic upgrade head
       - run: uv run alembic check
+      - run: uv run pytest
