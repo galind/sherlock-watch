@@ -28,6 +28,7 @@ def test_normalizes_vinted_listing_fixture() -> None:
     assert listing.description is None
     assert listing.location is None
     assert listing.condition == "Muy bueno"
+    assert listing.seller_name == "example-seller"
     assert listing.image_urls == (
         "https://images1.vinted.net/tc/primary/example.jpeg",
         "https://images1.vinted.net/tc/caseback/example.jpeg",
@@ -41,8 +42,21 @@ def test_missing_optional_fields_are_normalized_as_absent() -> None:
     raw_listing.pop("status")
     raw_listing.pop("photo")
     raw_listing.pop("photos")
+    raw_listing.pop("user")
 
     listing = VintedAdapter().normalize(raw_listing)
 
     assert listing.condition is None
+    assert listing.seller_name is None
     assert listing.image_urls == ()
+
+
+def test_malformed_seller_is_normalized_as_absent() -> None:
+    raw_listing = load_fixture()
+    raw_listing["user"] = {"login": "   "}
+    raw_listing["status"] = {"unexpected": "shape"}
+
+    listing = VintedAdapter().normalize(raw_listing)
+
+    assert listing.seller_name is None
+    assert listing.condition is None

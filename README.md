@@ -94,10 +94,12 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/example-id/example-token
 `DISCORD_WEBHOOK_URL` is optional, and must use HTTPS with a valid host when it
 is configured. Only `watch-vinted` sends notifications, and only when a query
 finds new listings; one-shot `poll-vinted` runs never send them. Each new watch
-gets its own Discord embed with a clickable title, price, search query, URL,
-and the listing's main picture as the thumbnail. Sending one webhook message
-per listing makes the individual watches easy to scan; embed fields are
-bounded to Discord's limits.
+gets its own Discord embed with a clickable title, large main picture, price,
+search query, and any available condition, seller, location, description, and
+publication time. Additional photos are summarized by count rather than sent as
+extra embeds. Sending one webhook message per listing makes the individual
+watches easy to scan; embed fields are bounded to Discord's limits and mentions
+from marketplace text are disabled.
 
 Webhook delivery is currently intentionally simple: failed deliveries emit a
 warning and polling continues, with no retries or alert history.

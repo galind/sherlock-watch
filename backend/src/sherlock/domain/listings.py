@@ -40,6 +40,7 @@ class Listing:
     description: str | None = None
     location: str | None = None
     condition: str | None = None
+    seller_name: str | None = None
     image_urls: tuple[str, ...] = ()
     published_at: datetime | None = None
     status: ListingStatus = ListingStatus.UNKNOWN

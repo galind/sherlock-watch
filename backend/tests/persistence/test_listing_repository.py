@@ -49,6 +49,7 @@ def test_upsert_reports_new_then_updates_without_losing_first_seen(
         assert record is not None
         assert record.title == "Updated Omega Seamaster"
         assert record.price_amount == Decimal("1200.00")
+        assert record.seller_name == "example-seller"
         assert record.first_seen_at == first_seen
         assert record.last_seen_at == last_seen
         assert record.raw_payload == changed_payload

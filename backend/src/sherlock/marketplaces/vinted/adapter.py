@@ -22,7 +22,8 @@ class VintedAdapter:
                 amount=Decimal(str(price["amount"])),
                 currency=price["currency_code"],
             ),
-            condition=raw_listing.get("status"),
+            condition=self._optional_text(raw_listing.get("status")),
+            seller_name=self._seller_name(raw_listing),
             image_urls=self._image_urls(raw_listing),
             status=(
                 ListingStatus.ACTIVE
@@ -47,3 +48,23 @@ class VintedAdapter:
                 images.append(image_url)
 
         return tuple(images)
+
+    @staticmethod
+    def _seller_name(raw_listing: Mapping[str, Any]) -> str | None:
+        user = raw_listing.get("user")
+        if not isinstance(user, Mapping):
+            return None
+
+        login = user.get("login")
+        if not isinstance(login, str):
+            return None
+
+        normalized_login = login.strip()
+        return normalized_login or None
+
+    @staticmethod
+    def _optional_text(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized_value = value.strip()
+        return normalized_value or None
