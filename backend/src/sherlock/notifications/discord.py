@@ -51,7 +51,7 @@ class DiscordWebhookNotifier:
         first_failure: DiscordWebhookError | None = None
         for listing in listings:
             try:
-                self._send_listing(query, listing)
+                self.notify_listing(query, listing)
             except DiscordWebhookError as error:
                 failures += 1
                 first_failure = first_failure or error
@@ -64,7 +64,8 @@ class DiscordWebhookNotifier:
                 f"Discord webhook delivery failed for {failures} {noun}"
             )
 
-    def _send_listing(self, query: str, listing: Listing) -> None:
+    def notify_listing(self, query: str, listing: Listing) -> None:
+        """Send one listing, allowing callers to track delivery separately."""
         payload = json.dumps(
             {
                 "allowed_mentions": {"parse": []},

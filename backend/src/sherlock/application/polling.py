@@ -29,6 +29,7 @@ def poll_vinted_search(
     per_page: int = 48,
     catalog_ids: Sequence[int] = (),
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    on_new_listing: Callable[[str, Listing, datetime], None] | None = None,
 ) -> PollResult:
     """Fetch Vinted pages, deduplicate them, and persist current state."""
     if pages < 1:
@@ -53,6 +54,8 @@ def poll_vinted_search(
             fetched_ids.add(listing.external_id)
             if repository.upsert(listing, raw_listing, seen_at=seen_at):
                 new_listings.append(listing)
+                if on_new_listing is not None:
+                    on_new_listing(query, listing, seen_at)
 
         if page.current_page >= page.total_pages:
             break

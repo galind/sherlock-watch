@@ -1,4 +1,4 @@
-"""Minimal environment-based runtime configuration."""
+"""Environment-based runtime configuration."""
 
 import os
 from dataclasses import dataclass
@@ -8,13 +8,23 @@ from urllib.parse import urlsplit
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    """Settings required by the manual Vinted polling command."""
+    """Runtime and watcher settings with safe development defaults."""
 
     database_url: str
     vinted_base_url: str
     discord_webhook_url: str | None = None
+    watch_interval_seconds: int = 3600
+    watch_pages: int = 3
+    watch_per_page: int = 48
+    watch_watches_only: bool = True
 
     def __post_init__(self) -> None:
+        if self.watch_interval_seconds < 1:
+            raise ValueError("WATCH_INTERVAL_SECONDS must be a positive integer")
+        if self.watch_pages < 1:
+            raise ValueError("WATCH_PAGES must be a positive integer")
+        if not 1 <= self.watch_per_page <= 96:
+            raise ValueError("WATCH_PER_PAGE must be an integer between 1 and 96")
         if self.discord_webhook_url is not None:
             _validate_discord_webhook_url(self.discord_webhook_url)
 
@@ -28,7 +38,35 @@ class Settings:
             database_url=database_url,
             vinted_base_url=os.getenv("VINTED_BASE_URL", "https://www.vinted.es"),
             discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
+            watch_interval_seconds=_environment_int(
+                "WATCH_INTERVAL_SECONDS", default=3600
+            ),
+            watch_pages=_environment_int("WATCH_PAGES", default=3),
+            watch_per_page=_environment_int("WATCH_PER_PAGE", default=48),
+            watch_watches_only=_environment_bool("WATCH_WATCHES_ONLY", default=True),
         )
+
+
+def _environment_int(name: str, *, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer") from None
+
+
+def _environment_bool(name: str, *, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be true or false")
 
 
 def _validate_discord_webhook_url(url: str) -> None:

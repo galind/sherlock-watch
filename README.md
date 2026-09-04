@@ -25,104 +25,159 @@ high-volume search captures every listing.
 
 ## Docker setup
 
-Docker Compose is the recommended local setup. Copy the example configuration;
-the defaults are development-only credentials and can be used as-is:
+Docker Engine with the Compose plugin is the only prerequisite for the
+recommended deployment. The default stack contains PostgreSQL, a one-shot
+migration job, and the long-running Vinted watcher. The test database and test
+runner are in a separate profile and do not start with the normal stack.
+
+For first-time setup, copy both examples:
 
 ```bash
 cp .env.example .env
+cp queries.example.txt queries.txt
 ```
 
-Start the persistent PostgreSQL service and wait for its health check:
+Edit `.env` before deployment. In particular, replace the development-only
+`POSTGRES_PASSWORD`, choose the regional `VINTED_BASE_URL`, and add a
+`DISCORD_WEBHOOK_URL` if alerts are wanted. The watcher settings are:
+
+```dotenv
+VINTED_BASE_URL=https://www.vinted.es
+DISCORD_WEBHOOK_URL=
+WATCH_INTERVAL_SECONDS=3600
+WATCH_PAGES=3
+WATCH_PER_PAGE=48
+WATCH_WATCHES_ONLY=true
+```
+
+The interval and page count must be positive integers, `WATCH_PER_PAGE` must be
+between 1 and 96, and `WATCH_WATCHES_ONLY` must be `true` or `false`. Invalid
+values fail before polling begins. The webhook is secret and is never printed;
+startup logs report only whether database and Discord configuration is present.
+
+Replace the fictional searches in `queries.txt` with one search per line. Blank
+lines are ignored. An absent, unreadable, or empty file stops the watcher with an
+actionable error.
+
+Start everything with one command:
 
 ```bash
-docker compose up -d --wait db
+docker compose up -d
 ```
 
-Apply migrations explicitly. This command exits non-zero and displays the
-Alembic error if a migration fails:
+Compose waits for PostgreSQL's health check, runs `alembic upgrade head`, and
+starts the watcher only after the migration job exits successfully. A failed
+migration therefore prevents the watcher from starting. PostgreSQL data lives in
+the named `postgres-data` volume, and the watcher restarts after unexpected
+exits while continuing to write to normal Docker logs.
+
+Follow progress and inspect service state with:
+
+```bash
+docker compose ps
+docker compose logs -f watcher
+docker compose logs --since 30m watcher
+```
+
+The watcher logs its redacted startup configuration, every cycle start and
+completion, per-query results, elapsed time, fetched/new/already-known counts,
+safe failure categories, and whether a failed query will retry immediately or
+in the next cycle. A healthy idle watcher has a `healthy` status in
+`docker compose ps`, continues to complete cycles, and may legitimately report
+zero new listings. A watcher that has not completed any successful query for
+roughly two configured intervals becomes `unhealthy`; repeated `status=failed`
+lines or no cycle completion indicate a failing or stuck poll.
+
+Useful lifecycle commands are:
+
+```bash
+docker compose restart watcher
+docker compose down
+```
+
+`docker compose down` removes containers and the Compose network but preserves
+the database volume. Only use `docker compose down --volumes` when permanently
+discarding all stored listing and notification state is intended.
+
+### One-shot and maintenance commands
+
+The existing CLI remains available through the opt-in `backend` tools service.
+Run one targeted poll with explicit options:
+
+```bash
+docker compose run --rm backend poll-vinted "omega seamaster" \
+  --pages 3 --per-page 48 --watches-only
+```
+
+Run every query from the deployment file exactly once, without sleeping:
+
+```bash
+docker compose run --rm -v "$PWD/queries.txt:/app/queries.txt:ro" backend \
+  watch-vinted --queries-file /app/queries.txt --once
+```
+
+Command-line values override the matching watcher environment values, so manual
+runs can also use positional queries or options such as `--pages`, `--per-page`,
+`--interval-seconds`, `--watches-only`, and `--no-watches-only`.
+
+Migrations can be rerun explicitly and are safe when the database is already at
+the current revision:
 
 ```bash
 docker compose run --rm migrate
 ```
 
-Run a targeted Vinted poll across three pages of 48 results:
+After editing `.env` or `queries.txt`, restart the watcher so it reloads the
+configuration:
 
 ```bash
-docker compose run --rm backend poll-vinted "omega seamaster" --pages 3 --per-page 48
+docker compose restart watcher
 ```
 
-The command deduplicates IDs repeated across shifting pages, inserts newly seen
-listings, refreshes known listings, and reports both counts. PostgreSQL preserves
-`first_seen_at`, updates `last_seen_at`, and stores the latest normalized fields
-plus the original Vinted payload.
+The local `.env` and `queries.txt` files are ignored by Git because they are
+deployment-specific.
 
-Add `--watches-only` to limit results to Vinted's women's and men's watch
-categories and remove most unrelated keyword matches:
+### Polling and notification reliability
 
-```bash
-docker compose run --rm backend poll-vinted "omega seamaster" --watches-only
-```
+Each cycle polls all queries. A failed query is retried with bounded backoff; if
+it still fails, the remaining queries run and the watcher sleeps normally before
+trying it again next cycle. A cycle with no successful queries does not terminate
+the process or refresh its health heartbeat. `KeyboardInterrupt` and container
+shutdown signals are not swallowed.
 
-Run multiple searches immediately and repeat them every hour:
+Polling deduplicates IDs repeated across shifting pages, inserts newly seen
+listings, and refreshes known listings. PostgreSQL preserves `first_seen_at`,
+updates `last_seen_at`, and stores the current normalized fields plus the latest
+raw Vinted payload.
 
-```bash
-docker compose run --rm backend watch-vinted "movado" "juvenia" \
-  --interval-seconds 3600 \
-  --pages 3 \
-  --per-page 48
-```
+When Discord is configured, each newly inserted listing is atomically added to a
+PostgreSQL-backed pending-delivery table in the same transaction. After polling,
+the watcher sends pending alerts one at a time and marks successful deliveries.
+Failures remain pending and are retried on the next cycle; delivered rows are not
+selected again, and the listing identity prevents the same alert from being
+enqueued by multiple matching queries. When Discord is disabled, polling behaves
+as before and does not create alert history.
 
-The default interval is 3600 seconds (one hour). Each cycle polls the queries sequentially
-and reports fetched, new, and already-known listing counts for each query. Add
-`--once` to run one complete cycle and exit without sleeping, which is useful for
-manual runs and configuration checks:
+Each alert is a Discord embed with the listing title, image, price, matched
+search, and available metadata. One-shot `poll-vinted` commands do not send
+alerts; `watch-vinted --once` does process its durable pending alerts.
 
-```bash
-docker compose run --rm backend watch-vinted "movado" "juvenia" --once
-```
+### Troubleshooting
 
-For a reusable local query list, put one query per line in `queries.txt` (blank
-lines are ignored) and pass it with `--queries-file`:
-
-```text
-omega seamaster
-movado
-juvenia
-```
-
-```bash
-docker compose run --rm -v "$PWD/queries.txt:/app/queries.txt:ro" backend \
-  watch-vinted --queries-file /app/queries.txt \
-  --watches-only --interval-seconds 3600
-```
-
-The local `queries.txt` file is ignored by Git because its contents are
-deployment-specific. The watch-category filter applies to every query in the
-file without changing its one-query-per-line format. Omit `--watches-only` to
-retain the broader keyword search behavior.
-
-To receive Discord notifications, add a webhook URL to the local `.env` file:
-
-```dotenv
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/example-id/example-token
-```
-
-`DISCORD_WEBHOOK_URL` is optional, and must use HTTPS with a valid host when it
-is configured. Only `watch-vinted` sends notifications, and only when a query
-finds new listings; one-shot `poll-vinted` runs never send them. Each new watch
-gets its own Discord embed with a clickable title, large main picture, price,
-search query, and any available condition, seller, location, description, and
-publication time. Additional photos are summarized by count rather than sent as
-extra embeds. Sending one webhook message per listing makes the individual
-watches easy to scan; embed fields are bounded to Discord's limits and mentions
-from marketplace text are disabled.
-
-Webhook delivery is currently intentionally simple: failed deliveries emit a
-warning and polling continues, with no retries or alert history.
-
-The scheduler is intentionally a simple foreground process and stops if a poll
-fails. Compose keeps it attached to the terminal so logs and failures remain
-visible; use your host's service manager for a long-lived homelab deployment.
+- If `db` is unhealthy, inspect `docker compose logs db`; port conflicts affect
+  host access but containers use the internal `db:5432` address.
+- If `migrate` exits non-zero, inspect `docker compose logs migrate`. The watcher
+  intentionally remains stopped until `docker compose run --rm migrate`
+  succeeds.
+- Vinted is an undocumented anonymous endpoint. `category=vinted-api` can mean a
+  transient outage, regional block, rate limit, or upstream response change.
+  Sherlock backs off and retries without exposing response or session secrets.
+- `Discord delivery ... failed` means the listing remains pending in PostgreSQL.
+  Confirm the webhook URL and outbound network access, then watch a later cycle
+  for `delivered=` to increase. Do not paste webhook URLs into issue reports.
+- If the watcher is unhealthy but logs show successful recent cycles, inspect
+  `docker compose exec watcher python -m sherlock watcher-health`; exit status 1
+  means the heartbeat is missing, invalid, or stale.
 
 The default Dockerfile target is the production-oriented `runtime` image. It
 contains Python 3.13, the application, migrations, and only the production
@@ -184,19 +239,6 @@ uv run alembic check
 `DATABASE_URL` is used by the CLI and Alembic. Set `TEST_DATABASE_URL` to a
 separate PostgreSQL database to include the persistence integration test in a
 host-run test suite.
-
-Stop and remove local containers and networks while preserving PostgreSQL data:
-
-```bash
-docker compose --profile test down
-```
-
-To also delete the persistent development database volume, use the following
-only when its data is no longer needed:
-
-```bash
-docker compose --profile test down --volumes
-```
 
 Preview the static landing page from the repository root with:
 

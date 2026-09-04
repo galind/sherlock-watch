@@ -112,3 +112,32 @@ def test_poll_passes_catalog_filter_to_vinted_client() -> None:
     )
 
     assert client.calls == [("omega", 1, 48, (22, 97))]
+
+
+def test_poll_invokes_new_listing_handler_only_for_insertions() -> None:
+    raw_listing = load_fixture()
+    client = StubVintedClient(
+        [
+            VintedSearchPage(
+                items=(raw_listing,),
+                current_page=1,
+                total_pages=1,
+                total_entries=1,
+            )
+        ]
+    )
+    seen_at = datetime(2026, 9, 4, 18, 0, tzinfo=UTC)
+    enqueued = []
+
+    poll_vinted_search(
+        client,
+        VintedAdapter(),
+        RecordingRepository(new_ids={"9867705286"}),
+        "omega",
+        now=lambda: seen_at,
+        on_new_listing=lambda query, item, created_at: enqueued.append(
+            (query, item.external_id, created_at)
+        ),
+    )
+
+    assert enqueued == [("omega", "9867705286", seen_at)]

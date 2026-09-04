@@ -1,6 +1,10 @@
 name: sherlock
 
-x-backend-build: &backend-build
+x-runtime-build: &runtime-build
+  context: .
+  target: runtime
+
+x-development-build: &development-build
   context: .
   target: development
 
@@ -8,6 +12,10 @@ x-backend-environment: &backend-environment
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-sherlock}:${POSTGRES_PASSWORD:-sherlock}@db:5432/${POSTGRES_DB:-sherlock}
   VINTED_BASE_URL: ${VINTED_BASE_URL:-https://www.vinted.es}
   DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+  WATCH_INTERVAL_SECONDS: ${WATCH_INTERVAL_SECONDS:-3600}
+  WATCH_PAGES: ${WATCH_PAGES:-3}
+  WATCH_PER_PAGE: ${WATCH_PER_PAGE:-48}
+  WATCH_WATCHES_ONLY: ${WATCH_WATCHES_ONLY:-true}
 
 services:
   db:
@@ -31,7 +39,7 @@ services:
 
   backend:
     profiles: [tools]
-    build: *backend-build
+    build: *development-build
     image: sherlock-backend:development
     environment: *backend-environment
     depends_on:
@@ -40,15 +48,43 @@ services:
     init: true
 
   migrate:
-    profiles: [tools]
-    build: *backend-build
-    image: sherlock-backend:development
+    build: *runtime-build
+    image: sherlock-backend:runtime
     environment: *backend-environment
     depends_on:
       db:
         condition: service_healthy
     entrypoint: [alembic]
     command: [upgrade, head]
+    restart: "no"
+
+  watcher:
+    build: *runtime-build
+    image: sherlock-backend:runtime
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: [watch-vinted, --queries-file, /app/queries.txt]
+    volumes:
+      - ./queries.txt:/app/queries.txt:ro
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -m
+        - sherlock
+        - watcher-health
+        - --heartbeat-file
+        - /tmp/sherlock-watcher-heartbeat.json
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
 
   test-db:
     profiles: [test]
@@ -68,7 +104,7 @@ services:
 
   test:
     profiles: [test]
-    build: *backend-build
+    build: *development-build
     image: sherlock-backend:development
     environment:
       DATABASE_URL: postgresql+psycopg://sherlock:sherlock@test-db:5432/sherlock_test

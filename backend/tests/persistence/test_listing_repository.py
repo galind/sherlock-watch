@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from sherlock.marketplaces.vinted import VintedAdapter
-from sherlock.persistence import ListingRepository
+from sherlock.persistence import DiscordNotificationRepository, ListingRepository
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "vinted" / "listing.json"
 
@@ -53,3 +53,29 @@ def test_upsert_reports_new_then_updates_without_losing_first_seen(
         assert record.first_seen_at == first_seen
         assert record.last_seen_at == last_seen
         assert record.raw_payload == changed_payload
+
+
+def test_discord_notification_is_deduplicated_and_not_retried_after_delivery(
+    database_engine,
+) -> None:
+    seen_at = datetime(2026, 9, 4, 18, 0, tzinfo=UTC)
+    payload = load_fixture()
+    item = VintedAdapter().normalize(payload)
+
+    with Session(database_engine) as session, session.begin():
+        assert ListingRepository(session).upsert(item, payload, seen_at=seen_at)
+        notifications = DiscordNotificationRepository(session)
+        assert notifications.enqueue("omega", item, seen_at)
+        assert not notifications.enqueue("seamaster", item, seen_at)
+
+    with Session(database_engine) as session, session.begin():
+        notifications = DiscordNotificationRepository(session)
+        pending = notifications.pending()
+        assert len(pending) == 1
+        assert pending[0].query == "omega"
+        notifications.mark_delivered(pending[0], attempted_at=seen_at)
+
+    with Session(database_engine) as session:
+        notifications = DiscordNotificationRepository(session)
+        assert notifications.pending() == ()
+        assert not notifications.enqueue("omega", item, seen_at)

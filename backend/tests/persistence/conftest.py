@@ -4,7 +4,12 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from sherlock.persistence import Base, ListingRecord, create_database_engine
+from sherlock.persistence import (
+    Base,
+    DiscordNotificationRecord,
+    ListingRecord,
+    create_database_engine,
+)
 
 
 @pytest.fixture(scope="session")
@@ -23,4 +28,5 @@ def database_engine():
 @pytest.fixture(autouse=True)
 def clear_listings(database_engine) -> None:
     with Session(database_engine) as session, session.begin():
+        session.execute(delete(DiscordNotificationRecord))
         session.execute(delete(ListingRecord))

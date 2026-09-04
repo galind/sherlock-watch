@@ -51,6 +51,7 @@ COPY --from=development-builder /opt/venv /opt/venv
 COPY backend/src ./src
 COPY backend/tests ./tests
 COPY backend/pyproject.toml ./pyproject.toml
+COPY compose.yaml ./compose.yaml
 
 
 FROM image-base AS runtime

@@ -71,7 +71,7 @@ def test_cli_uses_one_hour_default_interval(monkeypatch) -> None:
 
     cli.main(["watch-vinted", "movado"])
 
-    assert received == [(["movado"], 3600, 3, 48, False, False)]
+    assert received == [(["movado"], None, None, None, False, None)]
 
 
 def test_cli_reads_queries_file(monkeypatch, tmp_path) -> None:
@@ -87,7 +87,7 @@ def test_cli_reads_queries_file(monkeypatch, tmp_path) -> None:
 
     cli.main(["watch-vinted", "--queries-file", str(queries_file), "--once"])
 
-    assert received == [(["movado", "juvenia"], 3600, 3, 48, True, False)]
+    assert received == [(["movado", "juvenia"], None, None, None, True, None)]
 
 
 def test_cli_passes_poll_watch_filter(monkeypatch) -> None:
@@ -129,42 +129,18 @@ def test_watcher_result_output_is_concise(capsys) -> None:
     )
 
     assert capsys.readouterr().out == (
-        'Cycle 3 | query="omega seamaster" | fetched=12 | new=2 | already-known=10\n'
+        'Cycle 3 | query="omega seamaster" | fetched=12 | new=2 | '
+        "already-known=10 | elapsed-seconds=0.00 | status=success\n"
     )
 
 
-def test_watcher_does_not_notify_when_no_new_listings(capsys) -> None:
-    class UnexpectedNotifier:
-        def notify(self, query, listings) -> None:
-            pytest.fail(f"unexpected notification for {query}: {listings}")
-
-    cli._report_watch_result(
-        1,
-        "movado",
-        PollResult(fetched=4, new=0, already_known=4),
-        notifier=UnexpectedNotifier(),
-    )
-
-    assert capsys.readouterr().err == ""
-
-
-def test_watcher_logs_safe_warning_and_continues_after_notification_failure(
-    capsys,
-) -> None:
-    class FailingNotifier:
-        def notify(self, query, listings) -> None:
-            raise cli.DiscordWebhookError("Discord webhook delivery failed")
-
-    cli._report_watch_result(
-        2,
-        "movado",
-        PollResult(fetched=1, new=1, already_known=0),
-        notifier=FailingNotifier(),
-    )
+def test_watcher_failure_log_has_safe_category_and_retry_behavior(capsys) -> None:
+    cli._report_watch_failure(2, "movado", "vinted-api", 3, None)
 
     captured = capsys.readouterr()
-    assert "Discord webhook delivery failed" in captured.err
-    assert "polling will continue" in captured.err
+    assert 'query="movado"' in captured.err
+    assert "category=vinted-api" in captured.err
+    assert "retry=next-cycle" in captured.err
 
 
 def test_watcher_without_webhook_configuration_keeps_reporting(
@@ -175,6 +151,10 @@ def test_watcher_without_webhook_configuration_keeps_reporting(
         database_url = "postgresql+psycopg://localhost/sherlock"
         vinted_base_url = "https://www.vinted.es"
         discord_webhook_url = None
+        watch_interval_seconds = 3600
+        watch_pages = 3
+        watch_per_page = 48
+        watch_watches_only = True
 
     class StubEngine:
         def dispose(self) -> None:
@@ -195,6 +175,7 @@ def test_watcher_without_webhook_configuration_keeps_reporting(
             1,
             queries[0],
             PollResult(fetched=3, new=1, already_known=2),
+            0.1,
         )
 
     monkeypatch.setattr(cli.Settings, "from_environment", lambda: StubSettings())
@@ -210,3 +191,43 @@ def test_watcher_without_webhook_configuration_keeps_reporting(
     cli._watch_vinted(["movado"], 3600, 3, 48, True)
 
     assert 'query="movado"' in capsys.readouterr().out
+
+
+def test_startup_summary_does_not_expose_secrets(monkeypatch, capsys) -> None:
+    secret_url = "https://discord.example/api/webhooks/id/secret-token"
+
+    class StubSettings:
+        database_url = "postgresql+psycopg://user:database-secret@db/sherlock"
+        vinted_base_url = "https://www.vinted.es"
+        discord_webhook_url = secret_url
+        watch_interval_seconds = 3600
+        watch_pages = 3
+        watch_per_page = 48
+        watch_watches_only = True
+
+    class StubEngine:
+        def dispose(self) -> None:
+            pass
+
+    class StubClient:
+        def __init__(self, *, base_url: str) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    monkeypatch.setattr(cli.Settings, "from_environment", lambda: StubSettings())
+    monkeypatch.setattr(cli, "create_database_engine", lambda url: StubEngine())
+    monkeypatch.setattr(cli, "VintedClient", StubClient)
+    monkeypatch.setattr(cli, "watch_vinted_searches", lambda *args, **kwargs: None)
+
+    cli._watch_vinted(["movado"], None, None, None, True)
+
+    output = capsys.readouterr().out
+    assert "discord=configured" in output
+    assert "database=configured" in output
+    assert secret_url not in output
+    assert "database-secret" not in output

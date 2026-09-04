@@ -55,3 +55,37 @@ def test_discord_webhook_validation_does_not_expose_url() -> None:
         )
 
     assert webhook_url not in str(error.value)
+
+
+def test_watcher_environment_configuration_is_parsed(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://localhost/sherlock")
+    monkeypatch.setenv("WATCH_INTERVAL_SECONDS", "120")
+    monkeypatch.setenv("WATCH_PAGES", "2")
+    monkeypatch.setenv("WATCH_PER_PAGE", "24")
+    monkeypatch.setenv("WATCH_WATCHES_ONLY", "false")
+
+    settings = Settings.from_environment()
+
+    assert settings.watch_interval_seconds == 120
+    assert settings.watch_pages == 2
+    assert settings.watch_per_page == 24
+    assert settings.watch_watches_only is False
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("WATCH_INTERVAL_SECONDS", "0", "positive integer"),
+        ("WATCH_PAGES", "many", "must be an integer"),
+        ("WATCH_PER_PAGE", "97", "between 1 and 96"),
+        ("WATCH_WATCHES_ONLY", "sometimes", "true or false"),
+    ],
+)
+def test_invalid_watcher_environment_is_rejected_before_start(
+    monkeypatch, name: str, value: str, message: str
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://localhost/sherlock")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError, match=message):
+        Settings.from_environment()
